@@ -3,11 +3,42 @@ import requests
 import boto3
 import json
 import os
+import re
+from functools import reduce
+
+def format_update(date, details):
+    return date + ':\n' + details
+
+def format_message(updates):
+    n = str(len(updates))
+    return 'There are ' + n + ' new updates:\n\n' + reduce(lambda x,y: x + '\n\n' + y, updates[::-1])
+
+def save_to_bucket(update, bucket_name, key):
+    encoded_string = update.encode("utf-8")
+    s3 = boto3.resource("s3")
+    s3.Bucket(bucket_name).put_object(Key=key, Body=encoded_string)
+
+def send_sns(message):
+    message = '(dev) ' + message
+    client = boto3.client('sns')
+    response = client.publish(
+        TargetArn='arn:aws:sns:us-east-1:878228692056:starship-updates-dev',
+        Message=json.dumps({'default': message}),
+        MessageStructure='json',
+        Subject='Starship Update'
+    )
 
 def handler(event, context):
+
     # set environment variables
     sn = os.environ['SN']
-    mode = os.environ['MODE']
+
+    try:
+        s3 = boto3.resource("s3")
+        obj = s3.Object('starship-updates', 'latest-update-dev')
+        latest_update = obj.get()['Body'].read().decode('utf-8')
+    except:
+        latest_update = None
 
     # get web page
     url = 'https://everydayastronaut.com/when-will-sn' + sn + '-launch-live-updates/'
@@ -15,39 +46,24 @@ def handler(event, context):
     soup = BeautifulSoup(page.content, 'html.parser')
 
     # get current top-level update
-    date_tag = soup.find('h3' ,id='h-live-updates').find_next('p')
-    update_tag = date_tag.find_next('p')
+    updates = soup.find('h3' ,id='h-live-updates').find_all_next('p')
+    updates = [ele.get_text().strip() for ele in updates]
+    updates_formatted = [format_update(i,j) for i,j in zip(updates[::2], updates[1::2])] 
 
-    date = date_tag.get_text().strip()
-    update = update_tag.get_text().strip()
+    ex = r'^\D*\s\d{2},\s\d{4}\s~\s\d{2}:\d{2}\sUTC\s'
+    updates_formatted = list(filter(lambda x: re.match(ex, x), updates_formatted))
 
-    current_update = date + '\n\n' + update
-
-    # get the latest update from s3
-    bucket_name = "starship-updates"
-    s3 = boto3.resource("s3")
-    try:
-        obj = s3.Object(bucket_name, 'latest-update-dev')
-        latest_update = obj.get()['Body'].read().decode('utf-8')
-        need_to_update = latest_update != current_update
-    except:
-        need_to_update = True
-
-    # if updates are not the same, save newest update and send newest update to SNS
-    if (need_to_update or mode == 'debug'):
-        encoded_string = current_update.encode("utf-8")
-        s3.Bucket(bucket_name).put_object(Key='latest-update-dev', Body=encoded_string)
-
-        message = '(dev) ' + 'SN' + sn + ' Update\n\n' + current_update + '\n\nFrom ' + url + '.'
-
-        client = boto3.client('sns')
-        response = client.publish(
-            TargetArn='arn:aws:sns:us-east-1:878228692056:starship-updates-dev',
-            Message=json.dumps({'default': message}),
-            MessageStructure='json',
-            Subject='Starship Update'
-        )
-
+    if (latest_update):
+        newest_updates = updates_formatted[:updates_formatted.index(latest_update)]
+        if (newest_updates):
+            save_to_bucket(updates_formatted[0], 'starship-updates', 'latest-update-dev')
+            message = format_message(newest_updates)
+            send_sns(message)
+            return message
+        else: 
+            return 'No new updates'
+    else: # if no latest_update in S3, only send the top level update
+        save_to_bucket(updates_formatted[0], 'starship-updates', 'latest-update-dev')
+        message = format_message([updates_formatted[0]])
+        send_sns(message)
         return message
-    else: 
-        return 'No updates'
