@@ -9,12 +9,13 @@ from functools import reduce
 def format_update(date, details):
     return date + ':\n' + details
 
-def format_message(updates):
+def format_message(updates, env):
     n = str(len(updates))
-    if (n == 1):
-        return 'There is ' + n + ' new update:\n\n' + reduce(lambda x,y: x + '\n\n' + y, updates[::-1])
+    prefix = '(dev) ' if env == 'dev' else ''
+    if (n == '1'):
+        return prefix + 'There is ' + n + ' new update:\n\n' + reduce(lambda x,y: x + '\n\n' + y, updates[::-1])
     else:
-        return 'There are ' + n + ' new updates:\n\n' + reduce(lambda x,y: x + '\n\n' + y, updates[::-1])
+        return prefix + 'There are ' + n + ' new updates:\n\n' + reduce(lambda x,y: x + '\n\n' + y, updates[::-1])
 
 def save_to_bucket(update, bucket_name, key):
     encoded_string = update.encode("utf-8")
@@ -74,13 +75,13 @@ def handler(event, context):
             newest_updates = [updates_formatted[0]]
         if (newest_updates):
             save_to_bucket(updates_formatted[0], bucket_name, object_key)
-            message = format_message(newest_updates)
+            message = format_message(newest_updates, env)
             send_sns(message, sns_arn)
             return message
         else: 
             return 'No new updates'
     else: # if no latest_update in S3, only send the top level update
         save_to_bucket(updates_formatted[0], bucket_name, object_key)
-        message = format_message([updates_formatted[0]])
+        message = format_message([updates_formatted[0]], env)
         send_sns(message, sns_arn)
         return message
