@@ -11,18 +11,21 @@ def format_update(date, details):
 
 def format_message(updates):
     n = str(len(updates))
-    return 'There are ' + n + ' new updates:\n\n' + reduce(lambda x,y: x + '\n\n' + y, updates[::-1])
+    if (n == 1):
+        return 'There is ' + n + ' new update:\n\n' + reduce(lambda x,y: x + '\n\n' + y, updates[::-1])
+    else:
+        return 'There are ' + n + ' new updates:\n\n' + reduce(lambda x,y: x + '\n\n' + y, updates[::-1])
 
 def save_to_bucket(update, bucket_name, key):
     encoded_string = update.encode("utf-8")
     s3 = boto3.resource("s3")
     s3.Bucket(bucket_name).put_object(Key=key, Body=encoded_string)
 
-def send_sns(message):
+def send_sns(message, sns_arn):
     message = message
     client = boto3.client('sns')
     response = client.publish(
-        TargetArn='arn:aws:sns:us-east-1:878228692056:starship-updates-dev',
+        TargetArn=sns_arn,
         Message=json.dumps({'default': message}),
         MessageStructure='json',
         Subject='Starship Update'
@@ -30,12 +33,23 @@ def send_sns(message):
 
 def handler(event, context):
 
-    # set environment variables
-    sn = os.environ['SN']
+    # get input variables
+    env = event['env']
+    sn = event['sn']
+
+    # set constants
+    bucket_name = 'starship-updates'
+    
+    if (env == 'dev'):
+        object_key = 'latest-update-dev'
+        sns_arn = 'arn:aws:sns:us-east-1:878228692056:starship-updates-dev'
+    else:
+        object_key = 'latest-update'
+        sns_arn = 'arn:aws:sns:us-east-1:878228692056:starship-updates'
 
     try:
         s3 = boto3.resource("s3")
-        obj = s3.Object('starship-updates', 'latest-update-dev')
+        obj = s3.Object(bucket_name, object_key)
         latest_update = obj.get()['Body'].read().decode('utf-8')
     except:
         latest_update = None
@@ -54,16 +68,19 @@ def handler(event, context):
     updates_formatted = list(filter(lambda x: re.match(ex, x), updates_formatted))
 
     if (latest_update):
-        newest_updates = updates_formatted[:updates_formatted.index(latest_update)]
+        try:
+            newest_updates = updates_formatted[:updates_formatted.index(latest_update)]
+        except:
+            newest_updates = [updates_formatted[0]]
         if (newest_updates):
-            save_to_bucket(updates_formatted[0], 'starship-updates', 'latest-update-dev')
+            save_to_bucket(updates_formatted[0], bucket_name, object_key)
             message = format_message(newest_updates)
-            send_sns(message)
+            send_sns(message, sns_arn)
             return message
         else: 
             return 'No new updates'
     else: # if no latest_update in S3, only send the top level update
-        save_to_bucket(updates_formatted[0], 'starship-updates', 'latest-update-dev')
+        save_to_bucket(updates_formatted[0], bucket_name, object_key)
         message = format_message([updates_formatted[0]])
-        send_sns(message)
+        send_sns(message, sns_arn)
         return message
