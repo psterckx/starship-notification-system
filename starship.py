@@ -65,7 +65,7 @@ def handler(event, context):
     updates = [ele.get_text().strip() for ele in updates]
     updates_formatted = [format_update(i,j) for i,j in zip(updates[::2], updates[1::2])] 
 
-    ex = r'^\D*\s\d{2},\s\d{4}\s~\s\d{2}:\d{2}\sUTC\s'
+    ex = r'^\D*\s\d{2},\s\d{4}\s?~\s?\d{2}:\d{2}\sUTC\s'
     updates_formatted = list(filter(lambda x: re.match(ex, x), updates_formatted))
 
     if (latest_update):
