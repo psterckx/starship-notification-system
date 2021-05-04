@@ -12,10 +12,11 @@ def format_update(date, details):
 def format_message(updates, env):
     n = str(len(updates))
     prefix = '(dev) ' if env == 'dev' else ''
+    suffix = '\n\nFrom https://everydayastronaut.com/when-will-sn15-launch-live-updates/' if env == 'dev' else ''
     if (n == '1'):
-        return prefix + 'There is ' + n + ' new update:\n\n' + reduce(lambda x,y: x + '\n\n' + y, updates[::-1])
+        return prefix + 'There is ' + n + ' new update:\n\n' + reduce(lambda x,y: x + '\n\n' + y, updates[::-1]) + suffix
     else:
-        return prefix + 'There are ' + n + ' new updates:\n\n' + reduce(lambda x,y: x + '\n\n' + y, updates[::-1])
+        return prefix + 'There are ' + n + ' new updates:\n\n' + reduce(lambda x,y: x + '\n\n' + y, updates[::-1]) + suffix
 
 def save_to_bucket(update, bucket_name, key):
     encoded_string = update.encode("utf-8")
