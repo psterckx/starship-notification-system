@@ -34,20 +34,20 @@ def send_sns(message, sns_arn):
     )
 
 def handler(event, context):
-
     # get input variables
     env = event['env']
     sn = event['sn']
+    sns_id = event['sns_id']
 
     # set constants
     bucket_name = 'starship-updates'
     
     if (env == 'dev'):
         object_key = 'latest-update-dev'
-        sns_arn = 'arn:aws:sns:us-east-1:878228692056:starship-updates-dev'
+        sns_arn = 'arn:aws:sns:us-east-1:' + sns_id + ':starship-updates-dev'
     else:
         object_key = 'latest-update'
-        sns_arn = 'arn:aws:sns:us-east-1:878228692056:starship-updates'
+        sns_arn = 'arn:aws:sns:us-east-1:' + sns_id + ':starship-updates'
 
     try:
         s3 = boto3.resource("s3")
