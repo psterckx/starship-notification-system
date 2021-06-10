@@ -2,7 +2,6 @@ from bs4 import BeautifulSoup
 import requests
 import boto3
 import json
-import os
 import re
 from functools import reduce
 
